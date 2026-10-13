@@ -52,6 +52,30 @@ def discount_stack(
     return cache_mult * batch_mult
 
 
+def cache_break_even_reads(write_cost_per_m: float, read_discount: float = 0.10) -> float:
+    """Return the discounted-read count needed to recover cache-write cost.
+
+    ``write_cost_per_m`` uses normalized full-price-read units, so a value of
+    0.5 means that writing the prefix costs half as much as one uncached read.
+    """
+    if write_cost_per_m < 0 or read_discount >= 1.0:
+        return float("inf")
+    discount = max(0.0, read_discount)
+    return write_cost_per_m / (1.0 - discount)
+
+
+def cache_is_worth_it(
+    avg_cache_reads: float,
+    write_cost_per_m: float,
+    read_discount: float = 0.10,
+) -> bool:
+    """Return whether discounted reads recover the cache-write cost."""
+    if avg_cache_reads <= 0 or write_cost_per_m < 0:
+        return False
+    saved_by_reads = avg_cache_reads * (1.0 - max(0.0, read_discount))
+    return saved_by_reads > write_cost_per_m
+
+
 def break_even_utilization(discount_frac: float) -> float:
     """Utilization at which a commitment pays off ~= 1 - discount.
 

@@ -20,4 +20,22 @@
 - Carbon per query: 0.091 gCO2e
 - Cheapest+cleanest region: europe-north1
 
+### Extension: cache economics
+
+- Average cache reads assumed: 3.0
+- Break-even: 0.56 reads
+- Cache policy: enabled (2400/2400 eligible rows)
+
+### Extension: reasoning budget
+
+- Reasoning traffic: 8.4% of requests
+- Reasoning share: 16.5% of optimized cost and 94.0% of energy
+- Estimated savings when capped at 10% traffic: $0.00 and 0.00 Wh
+
+### Extension: carbon-aware scheduling
+
+- Interruptible jobs: us-east-1 -> europe-north1
+- Estimated carbon saved: 626,150.00 gCO2e (92.1%)
+- Trade-off: the cleanest region may increase latency or data-transfer cost.
+
 _Figures are June-2026 as-of snapshots; re-baseline before acting._

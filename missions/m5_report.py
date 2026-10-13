@@ -50,12 +50,15 @@ def run(verbose: bool = True) -> dict:
         "wh_per_query": wh,
         "carbon_g": sustainability.carbon_g(wh, "us-east-1"),
         "best_region": min(sustainability.REGION_CARBON, key=sustainability.REGION_CARBON.get),
+        "cache_economics": r2["cache_economics"],
+        "reasoning_budget": r2["reasoning_budget"],
+        "carbon_schedule": r3["carbon_scheduling"],
     }
 
     md = report.build_report(baseline, optimized, levers, sustainability=sust)
     out_md = os.path.join(ROOT, "outputs", "report.md")
     os.makedirs(os.path.dirname(out_md), exist_ok=True)
-    with open(out_md, "w") as f:
+    with open(out_md, "w", encoding="utf-8") as f:
         f.write(md)
     png = report.savings_waterfall(levers, os.path.join(ROOT, "outputs", "savings.png"))
 

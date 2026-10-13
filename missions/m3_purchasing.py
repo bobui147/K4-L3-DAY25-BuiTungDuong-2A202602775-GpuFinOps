@@ -7,8 +7,56 @@ import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
 from missions._common import load_csv, num, catalog_by_type
 from finops import pricing
+from finops import sustainability
 
 DAYS = 30
+
+
+def carbon_aware_schedule(jobs: list[dict], catalog: dict,
+                          baseline_region: str = "us-east-1") -> dict:
+    """Estimate carbon savings from moving interruptible jobs to the cleanest region.
+
+    Workload duration, GPU count, and GPU wattage stay fixed; only the grid
+    location changes. This keeps the result a scheduling estimate rather than
+    an unsupported claim about model performance.
+    """
+    target_region = min(
+        sustainability.REGION_CARBON,
+        key=sustainability.REGION_CARBON.get,
+    )
+    rows = []
+    for job in jobs:
+        if int(num(job["interruptible"])) != 1:
+            continue
+        gpu_hours = (
+            num(job["hours_per_day"])
+            * num(job["days"])
+            * int(num(job["num_gpus"]))
+        )
+        watts = num(catalog[job["gpu_type"]]["watts"])
+        energy_kwh = gpu_hours * watts / 1000.0
+        baseline_carbon = energy_kwh * sustainability.REGION_CARBON[baseline_region]
+        target_carbon = energy_kwh * sustainability.REGION_CARBON[target_region]
+        rows.append({
+            "job_id": job["job_id"],
+            "gpu_type": job["gpu_type"],
+            "energy_kwh": round(energy_kwh, 2),
+            "baseline_carbon_g": round(baseline_carbon, 2),
+            "target_carbon_g": round(target_carbon, 2),
+            "carbon_saved_g": round(baseline_carbon - target_carbon, 2),
+        })
+    baseline = sum(r["baseline_carbon_g"] for r in rows)
+    target = sum(r["target_carbon_g"] for r in rows)
+    saved = baseline - target
+    return {
+        "baseline_region": baseline_region,
+        "target_region": target_region,
+        "rows": rows,
+        "baseline_carbon_g": round(baseline, 2),
+        "target_carbon_g": round(target, 2),
+        "carbon_saved_g": round(saved, 2),
+        "carbon_reduction_pct": round(saved / baseline * 100, 1) if baseline else 0.0,
+    }
 
 
 def run(verbose: bool = True) -> dict:
@@ -42,6 +90,7 @@ def run(verbose: bool = True) -> dict:
 
     savings = on_demand_monthly - optimized_monthly
     savings_pct = savings / on_demand_monthly * 100 if on_demand_monthly else 0.0
+    carbon_schedule = carbon_aware_schedule(jobs, cat)
 
     if verbose:
         print("== M3 Purchasing Strategy ==")
@@ -50,9 +99,16 @@ def run(verbose: bool = True) -> dict:
         for r in recs:
             print(f"{r['job_id']:18}{r['gpu_type']:7}{r['tier']:11}${r['on_demand']:>11,}${r['optimized']:>11,}")
         print(f"\nmonthly: on-demand ${on_demand_monthly:,.0f} -> optimized ${optimized_monthly:,.0f}  ({savings_pct:.1f}% saved)")
+        print(
+            f"carbon-aware scheduling: {carbon_schedule['baseline_region']} -> "
+            f"{carbon_schedule['target_region']}, "
+            f"{carbon_schedule['carbon_saved_g']:,.0f} gCO2e saved "
+            f"({carbon_schedule['carbon_reduction_pct']:.1f}%)"
+        )
 
     return {"recommendations": recs, "on_demand_monthly": round(on_demand_monthly),
-            "optimized_monthly": round(optimized_monthly), "savings_pct": round(savings_pct, 1)}
+            "optimized_monthly": round(optimized_monthly), "savings_pct": round(savings_pct, 1),
+            "carbon_scheduling": carbon_schedule}
 
 
 if __name__ == "__main__":
